@@ -1,0 +1,12 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+node_modules/
+.next/
+.env.local
+.env*.local
+
+# Test docs — never commit real documents
+test-docs/real/
+
+# Misc
+.DS_Store
+*.pem
