@@ -1,10 +1,17 @@
 'use client';
 
-import { AgentEvent } from '@/lib/store';
 import { useEffect, useRef } from 'react';
 
+type SerializedAgentEvent = {
+  timestamp: number;
+  agent: string;
+  status: 'running' | 'done' | 'error';
+  message: string;
+  highlight?: string;
+};
+
 interface Props {
-  events: AgentEvent[];
+  events: SerializedAgentEvent[];
   isComplete: boolean;
 }
 
@@ -14,7 +21,7 @@ const agentColor: Record<string, string> = {
   system: 'text-zinc-500',
 };
 
-const statusIcon = (status: AgentEvent['status'], agent: string) => {
+const statusIcon = (status: SerializedAgentEvent['status'], agent: string) => {
   if (agent === 'system' && status === 'done') return '✦';
   if (status === 'running') return '⟳';
   if (status === 'done') return '✓';
@@ -22,7 +29,7 @@ const statusIcon = (status: AgentEvent['status'], agent: string) => {
   return '·';
 };
 
-const statusColor = (status: AgentEvent['status']) => {
+const statusColor = (status: SerializedAgentEvent['status']) => {
   if (status === 'running') return 'text-amber-400 animate-pulse';
   if (status === 'done') return 'text-emerald-400';
   if (status === 'error') return 'text-red-400';
@@ -64,7 +71,14 @@ export default function AgentFeed({ events, isComplete }: Props) {
             <span className={`shrink-0 ${statusColor(event.status)}`}>
               {statusIcon(event.status, event.agent)}
             </span>
-            <span className="text-zinc-300">{event.message}</span>
+            <span className="text-zinc-300 flex flex-wrap items-center gap-2">
+              {event.message}
+              {event.highlight && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/40 text-sky-300 text-xs font-mono font-semibold tracking-tight">
+                  {event.highlight}
+                </span>
+              )}
+            </span>
           </div>
         ))}
 

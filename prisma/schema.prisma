@@ -1,0 +1,174 @@
+// Prisma schema for ComplianceOS
+// Phase 1: User, Applicant, Document, Job, AgentEvent, CrossDocCheck, Incident, ApiKey
+// Models for later phases are defined now so we don't need destructive migrations later.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Identity ────────────────────────────────────────────────────────────
+
+model User {
+  id         String      @id @default(cuid())
+  clerkId    String      @unique
+  email      String      @unique
+  createdAt  DateTime    @default(now())
+  applicants Applicant[]
+  apiKeys    ApiKey[]
+}
+
+// ─── Applicants ──────────────────────────────────────────────────────────
+
+model Applicant {
+  id             String           @id @default(cuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  email          String?
+  phone          String?
+  panNumber      String?
+  status         ApplicantStatus  @default(DRAFT)
+  source         ApplicantSource  @default(MANUAL)
+  documents      Document[]
+  crossDocChecks CrossDocCheck[]
+  incidents      Incident[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([userId, panNumber])
+  @@index([userId])
+}
+
+enum ApplicantStatus {
+  DRAFT // auto-created from doc extraction, not yet confirmed by operator
+  PENDING // confirmed, awaiting verification
+  IN_REVIEW // has open incidents that need operator review
+  APPROVED
+  REJECTED
+}
+
+enum ApplicantSource {
+  MANUAL // operator filled the form
+  AUTO_EXTRACTED // came from doc extraction
+}
+
+// ─── Documents & Verification ────────────────────────────────────────────
+
+model Document {
+  id          String    @id @default(cuid())
+  applicantId String
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  fileName    String
+  fileUrl     String // path in object storage (Vercel Blob etc.) — for Phase 1, can be a local path
+  fileType    String // mime type
+  docType     String // bank_statement | salary_slip | form_26as | rent_agreement | emandate
+  jobs        Job[]
+  createdAt   DateTime  @default(now())
+
+  @@index([applicantId])
+}
+
+model Job {
+  id           String       @id @default(cuid())
+  documentId   String
+  document     Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  status       JobStatus    @default(PENDING)
+  extraction   Json?
+  verification Json?
+  error        String?
+  events       AgentEvent[]
+  createdAt    DateTime     @default(now())
+  completedAt  DateTime?
+
+  @@index([documentId])
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  ERROR
+}
+
+model AgentEvent {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  agent     String // 'Agent 01' | 'Agent 02' | 'Agent 03' | 'system'
+  status    String // 'running' | 'done' | 'error'
+  message   String
+  highlight String? // optional pill value rendered in the live feed
+  timestamp DateTime @default(now())
+
+  @@index([jobId])
+}
+
+// ─── Cross-doc reasoning & incidents ─────────────────────────────────────
+
+model CrossDocCheck {
+  id          String    @id @default(cuid())
+  applicantId String
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  checkType   String // 'name_match' | 'pan_match' | 'salary_match' | etc.
+  passed      Boolean
+  details     Json
+  runAt       DateTime  @default(now())
+
+  @@index([applicantId])
+}
+
+model Incident {
+  id          String       @id @default(cuid())
+  applicantId String
+  applicant   Applicant    @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  documentId  String? // optional — which doc triggered it
+  type        IncidentType
+  severity    Severity     @default(MEDIUM)
+  details     Json // { expected, found, source, ... }
+  resolved    Boolean      @default(false)
+  resolvedAt  DateTime?
+  resolution  String? // operator's note when resolving
+  createdAt   DateTime     @default(now())
+
+  @@index([applicantId])
+  @@index([resolved])
+}
+
+enum IncidentType {
+  NAME_MISMATCH
+  DOB_MISMATCH
+  ADDRESS_MISMATCH
+  PAN_MISMATCH
+  SALARY_INCONSISTENCY
+  EMPLOYER_MISMATCH
+  EXPIRED_DOCUMENT
+  DUPLICATE_DOCUMENT
+  OTHER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─── API access (Phase 7) — defined now to avoid future migrations ───────
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String    @unique // store hash, never plaintext
+  keyPrefix  String // first 8 chars for display: "cos_abc1..."
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  @@index([userId])
+}

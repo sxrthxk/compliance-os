@@ -1,13 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { ExtractedFields, VerificationResult } from '../store';
+import { ExtractedFields, VerificationResult } from '../pipeline';
 
 const client = new Anthropic();
 
-const VERIFICATION_PROMPT = (docType: string, fields: Record<string, unknown>) => `
+const VERIFICATION_PROMPT = (docType: string, fields: Record<string, unknown>) => {
+  const today = new Date().toISOString().split('T')[0];
+  return `
 You are a KYC compliance verification agent for an Indian fintech.
 
+Today's date: ${today}
 Document type: ${docType}
 Extracted fields: ${JSON.stringify(fields, null, 2)}
+
+When evaluating recency checks (e.g. "within X months"), use the date above as the current date. Do NOT assume the year is anything other than what's stated above. If a document is dated within the recency window relative to today's date, treat it as recent.
 
 Run verification checks appropriate for this document type. For each check:
 - Determine if it passes or fails based on the extracted data
@@ -68,6 +73,7 @@ For emandate:
 
 Respond ONLY with the JSON. No markdown, no explanation.
 `;
+};
 
 export async function runAgent02(extraction: ExtractedFields): Promise<VerificationResult> {
   const response = await client.messages.create({

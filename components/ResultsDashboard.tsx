@@ -1,4 +1,4 @@
-import { ExtractedFields, VerificationResult } from '@/lib/store';
+import { ExtractedFields, VerificationResult } from '@/lib/pipeline';
 import StatusBadge from './StatusBadge';
 
 interface Props {
